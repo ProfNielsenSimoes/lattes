@@ -184,6 +184,14 @@ def normalizar(texto):
         return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode().strip()
     return ''
 
+def formata_isbn(isbn):
+    if (len(isbn) == 13):
+        isbn = f'{isbn[:3]}-{isbn[3]}-{isbn[4:6]}-{isbn[6:12]}-{isbn[12]}'
+    elif (len(isbn) == 10):
+        isbn = f'{isbn[:2]}-{isbn[2:5]}-{isbn[5:9]}-{isbn[9]}'
+    
+    return isbn
+
 def obter_nivel_formacao(collection):
     formacoes = collection.getElementsByTagName("FORMACAO-ACADEMICA-TITULACAO")
     if not formacoes:
@@ -256,6 +264,8 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     qualis = rq.estratoQualis[issn][1]
                 else:
                     qualis = ''
+                if ((len(qualis) > 0) and (qualis.upper()[0]=='C')):
+                    continue
                 linha = [
                     ano,
                     nome, titulacao,
@@ -279,8 +289,10 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     tipo = "Completo"
                 elif (natureza  == "RESUMO"):
                     tipo = "Resumo"
+                    continue
                 elif (natureza == "RESUMO_EXPANDIDO"):
                     tipo = "Resumo Expandido"
+                    continue
                 else:
                     tipo = "N/Informado"
                 linha = [
@@ -288,7 +300,7 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     nome, titulacao,
                     dados.getAttribute("DOI"),
                     normalizar(dados.getAttribute("TITULO-DO-TRABALHO")),
-                    f"Congresso:{tipo}", detalhe.getAttribute("ISBN"), 
+                    f"Congresso:{tipo}", formata_isbn(detalhe.getAttribute("ISBN")), 
                     normalizar(detalhe.getAttribute("CLASSIFICACAO-DO-EVENTO")), 
                     normalizar(detalhe.getAttribute("NOME-DO-EVENTO"))
                 ]
@@ -310,9 +322,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 linha = [
                     ano,
                     nome, titulacao,
-                    detalhe.getAttribute("ISBN"),
+                    dados.getAttribute("DOI"),
                     normalizar(dados.getAttribute("TITULO-DO-LIVRO")),
-                    f'Livro:{tipo}', '', '', ''
+                    f'Livro:{tipo}', formata_isbn(detalhe.getAttribute("ISBN")), '', ''
                 ]
                 publicacoes.append(linha)
 
@@ -325,9 +337,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 linha = [
                     ano,
                     nome, titulacao,
-                    dados.getAttribute("ISBN"),
+                    dados.getAttribute("DOI"),
                     normalizar(dados.getAttribute("TITULO-DO-CAPITULO-DO-LIVRO")),
-                    'Capitulo Livro', '', '',
+                    'Capitulo Livro', formata_isbn(detalhe.getAttribute("ISBN")), '',
                     normalizar(detalhe.getAttribute("TITULO-DO-LIVRO"))
                 ]
                 publicacoes.append(linha)
@@ -426,6 +438,7 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     sTipo = dados.getAttribute("TIPO").upper()
                     if (sTipo[:7] == 'ORIENTA' and sTipo.find("PROJETO DE EXTENS") >= 0):
                         tipo = 'Extensão'
+                        continue
                     else:
                         tipo = 'N/Informado'
                         continue
