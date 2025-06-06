@@ -596,7 +596,6 @@ def main():
     anos_validos = [str(a) for a in range(ano_inicio, ano_fim + 1)]
     pastas = []
 
-    todas_publicacoes = []
     for root, folders, files in os.walk(pasta_curriculos):
         if (len(folders)>0):
             pastas = folders.copy()
@@ -604,6 +603,7 @@ def main():
             pastas.append('curriculos')
         if (len(files)>0):
             print(f"\nLendo arquivo na pasta: {pastas[0]} ({len(files)} arquivos)")
+            todas_publicacoes = []
 
             for file in files:
                 if file.endswith('.xml'):
