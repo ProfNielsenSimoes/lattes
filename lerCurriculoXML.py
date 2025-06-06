@@ -261,7 +261,7 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     nome, titulacao,
                     dados.getAttribute("DOI"),
                     normalizar(dados.getAttribute("TITULO-DO-ARTIGO")),
-                    'Periodico', '', qualis, 
+                    'Periodico', qualis, '', 
                     per
                 ]
                 publicacoes.append(linha)
@@ -286,9 +286,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 linha = [
                     ano,
                     nome, titulacao,
-                    dados.getAttribute("ISSN-ISBN"),
+                    dados.getAttribute("DOI"),
                     normalizar(dados.getAttribute("TITULO-DO-TRABALHO")),
-                    f"Congresso:{tipo}", '', 
+                    f"Congresso:{tipo}", detalhe.getAttribute("ISBN"), 
                     normalizar(detalhe.getAttribute("CLASSIFICACAO-DO-EVENTO")), 
                     normalizar(detalhe.getAttribute("NOME-DO-EVENTO"))
                 ]
@@ -428,8 +428,10 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                         tipo = 'Extensão'
                     else:
                         tipo = 'N/Informado'
+                        continue
                 else:
                     tipo = 'N/Informado'
+                    continue
                 linha = [
                     ano,
                     nome, titulacao,
