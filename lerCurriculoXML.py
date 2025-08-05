@@ -1,6 +1,7 @@
 import os
 import csv
 import unicodedata
+import baremas
 from xml.dom.minidom import parse
 from datetime import datetime
 import relatorioQualis as rq
@@ -162,9 +163,64 @@ nomes = {
     'V?tor': 'Vitor'
 }
 
+bolsistaPQ = [
+  "ADENILDA CRISTINA HONORIO FRANCA",
+  "ADILSON PACHECO DE SOUZA",
+  "ALESANDRO FERREIRA DOS SANTOS",
+  "ALEX NEVES JUNIOR",
+  "AMARILDO SALINA RUIZ",
+  "AMILCAR SABINO DAMAZO",
+  "ANDERSON CORASSA",
+  "ANDRE SOARES DE OLIVEIRA",
+  "ARLEANA DO BOM PARTO FERREIRA DE ALMEIDA",
+  "BRUNA ANDRADE IRINEU",
+  "CRISTIANO MACIEL",
+  "DALTON HENRIQUE PEREIRA",
+  "DOMINGOS DE JESUS RODRIGUES",
+  "DOMINGOS TABAJARA DE OLIVEIRA MARTINS",
+  "EDLLEY MAX PESSOA DA SILVA",
+  "EDUARDO EUSTAQUIO DE SOUZA FIGUEIREDO",
+  "EDUARDO GUIMARAES COUTO",
+  "EDUARDO HENRIQUE BEVITORI KLING DE MORAES",
+  "EDUARDO LUZIA FRANCA",
+  "ERALCI MOREIRA TEREZIO",
+  "FABIANO ANDRE PETTER",
+  "FERNANDA REGINA CASAGRANDE GIACHINI VITORINO",
+  "FERNANDO ZAGURY VAZ DE MELLO",
+  "FILOMENA MARIA DE ARRUDA MONTEIRO",
+  "FRANCISCO DE ALMEIDA LOBO",
+  "GABRIEL LUIZ CRUZ DE SOUZA",
+  "GUSTAVO TADEU VOLPATO",
+  "IBRAIM FANTIN DA CRUZ",
+  "JOANIS TILEMAHOS ZERVOUDAKIS",
+  "JOSE EDUARDO DE AGUILAR SIQUEIRA DO NASCIMENTO",
+  "LEANA OLIVEIRA FREITAS",
+  "LEANDRO SCHLEMMER BRASIL",
+  "LUCIANO DA SILVA CABRAL",
+  "LUCIANO NAKAZATO",
+  "MADILEINE FRANCELY AMERICO",
+  "MARCELO LATTARULO CAMPOS",
+  "MARCELO SACARDI BIUDES",
+  "MARCIA QUEIROZ LATORRACA",
+  "MARCOS ANTONIO SOARES",
+  "MARIO SPEZZAPRIA",
+  "MILTON FERREIRA DE MORAES",
+  "NELSON LEITAO PAES",
+  "NILCE VIEIRA CAMPOS FERREIRA",
+  "RICHARD DE CAMPOS PACHECO",
+  "ROBERTO LOPES DE SOUZA",
+  "THIAGO JUNQUEIRA IZZO",
+  "VALERIA DUTRA",
+  "VALERIA REGIA FRANCO SOUSA",
+  "VINICIUS CARVALHO PEREIRA"
+]
+
+
 periodicos = []
 erros_xml  = []
 resumo = [0, 0, 0, 0]
+
+pq = 0
 
 def corrigir_nome(nome, dicionario):
     if nome:
@@ -210,9 +266,10 @@ def obter_nivel_formacao(collection):
     else:
         return "Nao informado"
 
-def extrair_publicacoes(xml_path, anos_validos, file_name):
+def extrair_publicacoes(xml_path, anos_validos, file_name, pesquisador):
     global erros_xml
     global resumo
+    global pq
     
     publicacoes = []
     try:
@@ -235,15 +292,24 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
             return publicacoes
 
         nome = corrigir_nome(normalizar(dados_gerais.getAttribute("NOME-COMPLETO")), nomes)
+        pesquisador.nome = nome
         
         titulacao = obter_nivel_formacao(collection)
         # Determinar categoria para resumo
         if titulacao == "Doutorado":
             resumo[2] = resumo[2] + 1
+            pesquisador.doutorado = True
         elif titulacao == "Mestrado":
             resumo[1] = resumo[1] + 1
+            pesquisador.mestrado = True
         else:
             resumo[0] = resumo[0] + 1
+
+        # Bolsista PQ
+        if (nome.upper() in bolsistaPQ):
+            pesquisador.bolsistaPQ = True
+            titulacao = titulacao + " (PQ)"
+            pq += 1
 
         print("%s (%s)" % (nome, titulacao))
 
@@ -261,11 +327,25 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 per = issn + ';' + corrigir_nome(per.replace('.', ' ').strip(), revistas)
 
                 if (issn in jcr.jcr.keys()):
-                    qualis = f'JCR:{jcr.jcr[issn][0]}'                    
+                    qualis = f'JCR:{jcr.jcr[issn][0]}'
+                    pesquisador.avaliacao[ano].addJCR(1)
                 elif (issn in jcr.eissn.keys()):
-                    qualis = f'JCR:{jcr.eissn[issn][0]}'                    
+                    qualis = f'JCR:{jcr.eissn[issn][0]}'
+                    pesquisador.avaliacao[ano].addJCR(1)
                 elif (issn in rq.estratoQualis.keys()):
                     qualis = rq.estratoQualis[issn][1]
+                    if (qualis == 'A1'):
+                        pesquisador.avaliacao[ano].addA1(1)
+                    elif (qualis == 'A2'):
+                        pesquisador.avaliacao[ano].addA2(1)
+                    elif (qualis == 'A3'):
+                        pesquisador.avaliacao[ano].addA3(1)
+                    elif (qualis == 'A4'):
+                        pesquisador.avaliacao[ano].addA4(1)
+                    elif (qualis == 'B1' or qualis == 'B2'):
+                        pesquisador.avaliacao[ano].addB1B2(1)
+                    elif (qualis == 'B3' or qualis == 'B4'):
+                        pesquisador.avaliacao[ano].addB3B4(1)
                 else:
                     qualis = ''
                     continue
@@ -281,36 +361,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     per
                 ]
                 publicacoes.append(linha)
+
                 if not (per in periodicos):
                     periodicos.append(per)
-
-        # Trabalhos em eventos
-        for trabalho in collection.getElementsByTagName("TRABALHO-EM-EVENTOS"):
-            dados = trabalho.getElementsByTagName('DADOS-BASICOS-DO-TRABALHO')[0]
-            detalhe = trabalho.getElementsByTagName('DETALHAMENTO-DO-TRABALHO')[0]
-            ano = dados.getAttribute("ANO-DO-TRABALHO")
-            if ano in anos_validos:
-                natureza = dados.getAttribute("NATUREZA")
-                if (natureza == "COMPLETO"):
-                    tipo = "Completo"
-                elif (natureza  == "RESUMO"):
-                    tipo = "Resumo"
-                    continue
-                elif (natureza == "RESUMO_EXPANDIDO"):
-                    tipo = "Resumo Expandido"
-                    continue
-                else:
-                    tipo = "N/Informado"
-                linha = [
-                    ano,
-                    nome, titulacao,
-                    dados.getAttribute("DOI"),
-                    normalizar(dados.getAttribute("TITULO-DO-TRABALHO")),
-                    f"Congresso:{tipo}", formata_isbn(detalhe.getAttribute("ISBN")), 
-                    normalizar(detalhe.getAttribute("CLASSIFICACAO-DO-EVENTO")), 
-                    normalizar(detalhe.getAttribute("NOME-DO-EVENTO"))
-                ]
-                publicacoes.append(linha)
 
         # Livros publicados / organizados
         for livro in collection.getElementsByTagName("LIVRO-PUBLICADO-OU-ORGANIZADO"):
@@ -321,10 +374,14 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 sTipo = dados.getAttribute("TIPO")
                 if (sTipo == "LIVRO_PUBLICADO"):
                     tipo = "Publicado"
+                    pesquisador.avaliacao[ano].addLivroTecnico(1)
                 elif (sTipo == "LIVRO_ORGANIZADO_OU_EDICAO"):
                     tipo = "Organizado/Editado"
+                    pesquisador.avaliacao[ano].addOrganizacaoLivro(1)
                 else:
                     tipo = "Pub. N/Informada"
+                    continue
+
                 linha = [
                     ano,
                     nome, titulacao,
@@ -335,18 +392,74 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 publicacoes.append(linha)
 
         # Capítulos de livro
+        livros = []
         for cap in collection.getElementsByTagName("CAPITULO-DE-LIVRO-PUBLICADO"):
             dados = cap.getElementsByTagName('DADOS-BASICOS-DO-CAPITULO')[0]
             detalhe = cap.getElementsByTagName('DETALHAMENTO-DO-CAPITULO')[0]
             ano = dados.getAttribute("ANO")
+            isbn = formata_isbn(detalhe.getAttribute("ISBN"))
+            livro = normalizar(detalhe.getAttribute("TITULO-DO-LIVRO"))
+            if (len(isbn.strip())==0):
+                if livro in livros:
+                    continue
+                livros.append(livro)
+            else:
+                if isbn in livros:
+                    continue
+                livros.append(isbn)
+            if (livro[:6].upper() == "ANAIS "):
+                continue
+
             if ano in anos_validos:
+                pesquisador.avaliacao[ano].addCapituloLivro(1)
+                
                 linha = [
                     ano,
                     nome, titulacao,
                     dados.getAttribute("DOI"),
                     normalizar(dados.getAttribute("TITULO-DO-CAPITULO-DO-LIVRO")),
-                    'Capitulo Livro', formata_isbn(detalhe.getAttribute("ISBN")), '',
-                    normalizar(detalhe.getAttribute("TITULO-DO-LIVRO"))
+                    'Capitulo Livro', isbn, '',
+                    livro
+                ]
+                publicacoes.append(linha)
+
+        # Trabalhos em eventos
+        for trabalho in collection.getElementsByTagName("TRABALHO-EM-EVENTOS"):
+            dados = trabalho.getElementsByTagName('DADOS-BASICOS-DO-TRABALHO')[0]
+            detalhe = trabalho.getElementsByTagName('DETALHAMENTO-DO-TRABALHO')[0]
+            ano = dados.getAttribute("ANO-DO-TRABALHO")
+            classificacao = normalizar(detalhe.getAttribute("CLASSIFICACAO-DO-EVENTO"))
+
+            if ano in anos_validos:
+                natureza = dados.getAttribute("NATUREZA")
+                if (natureza == "COMPLETO"):
+                    tipo = "Completo"
+                else:
+                    continue
+                """
+                elif (natureza  == "RESUMO"):
+                    tipo = "Resumo"
+                elif (natureza == "RESUMO_EXPANDIDO"):
+                    tipo = "Resumo Expandido"
+                else:
+                    tipo = "N/Informado"
+                """
+                if (classificacao == "INTERNACIONAL"):
+                    pesquisador.avaliacao[ano].addTrabalhoInternacional(1)
+                elif (classificacao == "NACIONAL"):
+                    pesquisador.avaliacao[ano].addTrabalhoNacional(1)
+                else:
+                    continue
+                
+                
+                linha = [
+                    ano,
+                    nome, titulacao,
+                    dados.getAttribute("DOI"),
+                    normalizar(dados.getAttribute("TITULO-DO-TRABALHO")),
+                    f"Congresso:{tipo}", formata_isbn(detalhe.getAttribute("ISBN")), 
+                    classificacao, 
+                    normalizar(detalhe.getAttribute("NOME-DO-EVENTO"))
                 ]
                 publicacoes.append(linha)
 
@@ -358,11 +471,18 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
             if ano in anos_validos:
                 sTipo = dados.getAttribute("TIPO")
                 natureza = dados.getAttribute("NATUREZA")
-                if ((sTipo in ["FESTIVAL","CONCERTO","EXPOSICAO","CONCURSO"]) and (natureza in ["CURADORIA","ORGANIZACAO"])) or \
-                   ((sTipo == "CONGRESSO") and (natureza == "ORGANIZACAO")):
+                if ((sTipo in ["FESTIVAL","CONCERTO","EXPOSICAO","CONCURSO"])):
+                    if (natureza == "CURADORIA"):
+                        pesquisador.avaliacao[ano].addCuradoria(1)
+                    elif (natureza == "ORGANIZACAO"):
+                        pesquisador.avaliacao[ano].addOrganizacaoFestival(1)
                     tipo = f"{sTipo}:{natureza.lower()}"
+                elif ((sTipo == "CONGRESSO") and (natureza == "ORGANIZACAO")):
+                    tipo = f"{sTipo}:{natureza.lower()}"
+                    pesquisador.avaliacao[ano].addOrganizacaoEventos(1)
                 else:
                     continue
+
                 linha = [
                     ano,
                     nome, titulacao,
@@ -370,94 +490,6 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     normalizar(dados.getAttribute("TITULO")),
                     tipo, '', '', 
                     normalizar(dados.getAttribute("TITULO"))
-                ]
-                publicacoes.append(linha)
-
-        # Orientacoes concluidas Pós-Doutorado
-        for orientacoes in collection.getElementsByTagName("ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO"):
-            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO')[0]
-            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO')[0]
-            ano = dados.getAttribute("ANO")
-            if ano in anos_validos:
-                if (detalhe.getAttribute("TIPO-DE-ORIENTACAO") == "CO_ORIENTADOR"):
-                    continue
-                linha = [
-                    ano,
-                    nome, titulacao,
-                    dados.getAttribute("DOI"),
-                    normalizar(dados.getAttribute("TITULO")),
-                    f'Pós-Doutorado:{detalhe.getAttribute("TIPO-DE-ORIENTACAO")}', '', '', 
-                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
-                ]
-                publicacoes.append(linha)
-
-        # Orientacoes concluidas Doutorado
-        for orientacoes in collection.getElementsByTagName("ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO"):
-            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO')[0]
-            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO')[0]
-            ano = dados.getAttribute("ANO")
-            if ano in anos_validos:
-                if (detalhe.getAttribute("TIPO-DE-ORIENTACAO") == "CO_ORIENTADOR"):
-                    continue
-                linha = [
-                    ano,
-                    nome, titulacao,
-                    dados.getAttribute("DOI"),
-                    normalizar(dados.getAttribute("TITULO")),
-                    f'Doutorado:{detalhe.getAttribute("TIPO-DE-ORIENTACAO")}', '', '', 
-                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
-                ]
-                publicacoes.append(linha)
-
-        # Orientacoes concluidas Mestrado
-        for orientacoes in collection.getElementsByTagName("ORIENTACOES-CONCLUIDAS-PARA-MESTRADO"):
-            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-ORIENTACOES-CONCLUIDAS-PARA-MESTRADO')[0]
-            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-ORIENTACOES-CONCLUIDAS-PARA-MESTRADO')[0]
-            ano = dados.getAttribute("ANO")
-            if ano in anos_validos:
-                if (detalhe.getAttribute("TIPO-DE-ORIENTACAO") == "CO_ORIENTADOR"):
-                    continue
-                linha = [
-                    ano,
-                    nome, titulacao,
-                    dados.getAttribute("DOI"),
-                    normalizar(dados.getAttribute("TITULO")),
-                    f'Mestrado:{detalhe.getAttribute("TIPO-DE-ORIENTACAO")}', '', '', 
-                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
-                ]
-                publicacoes.append(linha)
-
-        # Orientacoes concluidas Especializacao / TCC / Iniciacao Científica / Extensão
-        for orientacoes in collection.getElementsByTagName("OUTRAS-ORIENTACOES-CONCLUIDAS"):
-            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-OUTRAS-ORIENTACOES-CONCLUIDAS')[0]
-            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-OUTRAS-ORIENTACOES-CONCLUIDAS')[0]
-            ano = dados.getAttribute("ANO")            
-            if ano in anos_validos:
-                natureza = dados.getAttribute("NATUREZA")
-                if natureza == 'TRABALHO_DE_CONCLUSAO_DE_CURSO_GRADUACAO':
-                    tipo = 'TCC'
-                elif natureza == 'INICIACAO_CIENTIFICA':
-                    tipo = 'IC'
-                elif natureza == 'MONOGRAFIA_DE_CONCLUSAO_DE_CURSO_APERFEICOAMENTO_E_ESPECIALIZACAO':
-                    tipo = 'Especializacao'
-                elif natureza == 'ORIENTACAO-DE-OUTRA-NATUREZA':
-                    sTipo = dados.getAttribute("TIPO").upper()
-                    if (sTipo[:7] == 'ORIENTA' and sTipo.find("PROJETO DE EXTENS") >= 0):
-                        tipo = 'Extensão'
-                        continue
-                    else:
-                        tipo = 'N/Informado'
-                        continue
-                else:
-                    tipo = 'N/Informado'
-                    continue
-                linha = [
-                    ano,
-                    nome, titulacao,
-                    dados.getAttribute("DOI"),
-                    normalizar(dados.getAttribute("TITULO")),
-                    f'Orientacao:{tipo}', '', '', 
-                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
                 ]
                 publicacoes.append(linha)
 
@@ -470,12 +502,19 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 natureza = dados.getAttribute("NATUREZA")
                 if natureza == 'ARTIGO':
                     tipo = 'Artigo'
+                    pesquisador.avaliacao[ano].addTraducaoArtigo(1)
                 elif natureza == 'LIVRO':
+                    pesquisador.avaliacao[ano].addTraducaoLivro(1)
                     tipo = 'Livro'
+                else:
+                    continue
+                """
                 elif natureza == 'OUTRO':
                     sTipo = 'Outro'
                 else:
                     tipo = 'N/Informado'
+                """
+
                 linha = [
                     ano,
                     nome, titulacao,
@@ -495,6 +534,29 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 natureza = dados.getAttribute("NATUREZA")
                 if (natureza in ["CINEMA","FOTOGRAFIA","VIDEO","INSTALACAO","DESENHO","PINTURA","GRAVURA"]):
                     sTipo = dados.getAttribute("")
+
+                pesquisador.avaliacao[ano].addProducaoVisual(1)
+
+                linha = [
+                    ano,
+                    nome, titulacao, '',
+                    normalizar(dados.getAttribute("TITULO")),
+                    f'ProducaoVisual:{natureza}', '', '', 
+                    normalizar(detalhe.getAttribute("LOCAL-DO-EVENTO"))
+                ]
+                publicacoes.append(linha)
+
+        for prod in collection.getElementsByTagName("ARTES-VISUAIS"):
+            dados = prod.getElementsByTagName('DADOS-BASICOS-DE-ARTES-VISUAIS')[0]
+            detalhe = prod.getElementsByTagName('DETALHAMENTO-DE-ARTES-VISUAIS')[0]
+            ano = dados.getAttribute("ANO")            
+            if ano in anos_validos:
+                natureza = dados.getAttribute("NATUREZA")
+                if (natureza in ["CINEMA","FOTOGRAFIA","VIDEO","INSTALACAO","DESENHO","PINTURA","GRAVURA"]):
+                    sTipo = dados.getAttribute("")
+                
+                pesquisador.avaliacao[ano].addProducaoVisual(1)
+
                 linha = [
                     ano,
                     nome, titulacao, '',
@@ -513,6 +575,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 natureza = dados.getAttribute("NATUREZA")
                 if (natureza in ["APRESENTACAO_DE_OBRA","COMPOSICAO","TRILHA_SONORA","INTERPRETACAO","PUBLICACAO_DE_PARTITURA","ARRANJO"]):
                     sTipo = dados.getAttribute("")
+
+                pesquisador.avaliacao[ano].addProducaoMusical(1)
+
                 linha = [
                     ano,
                     nome, titulacao, '',
@@ -531,6 +596,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 natureza = dados.getAttribute("NATUREZA")
                 if (natureza in ["AUDIOVISUAL","PERFORMATICA","OPERISTICA","COREOGRAFICA","CIRCENSE","TEATRAL"]):
                     sTipo = dados.getAttribute("")
+
+                pesquisador.avaliacao[ano].addArtesCenicas(1)
+
                 linha = [
                     ano,
                     nome, titulacao, '',
@@ -548,6 +616,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 detalhe = sof.getElementsByTagName("DETALHAMENTO-DO-SOFTWARE")[0]
                 ano = dados.getAttribute("ANO")
                 if ano in anos_validos:
+
+                    pesquisador.avaliacao[ano].addProgramaComputador(1)
+
                     linha = [
                         ano,
                         nome, titulacao, '',
@@ -563,6 +634,9 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 detalhe = pat.getElementsByTagName("DETALHAMENTO-DA-PATENTE")[0]
                 ano = dados.getAttribute("ANO-DESENVOLVIMENTO")
                 if ano in anos_validos:
+
+                    pesquisador.avaliacao[ano].addPatenteDepositada(1)
+
                     linha = [
                         ano,
                         nome, titulacao, '',
@@ -571,6 +645,127 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                         normalizar(dados.getAttribute("TITULO"))
                     ]
                     publicacoes.append(linha)
+
+        # Material Didatico
+        for material in collection.getElementsByTagName("DESENVOLVIMENTO-DE-MATERIAL-DIDATICO-OU-INSTRUCIONAL"):
+            dados = material.getElementsByTagName('DADOS-BASICOS-DO-MATERIAL-DIDATICO-OU-INSTRUCIONAL')[0]
+            detalhe = material.getElementsByTagName('DETALHAMENTO-DO-MATERIAL-DIDATICO-OU-INSTRUCIONAL')[0]
+            ano = dados.getAttribute("ANO")
+            if ano in anos_validos:
+                pesquisador.avaliacao[ano].addMaterialDidatico(1)
+
+                linha = [
+                    ano,
+                    nome, titulacao, '',
+                    normalizar(dados.getAttribute("TITULO")),
+                    'Material Didatico/Institucional', '', 
+                    normalizar(dados.getAttribute("MEIO-DE-DIVULGACAO")), 
+                    normalizar(detalhe.getAttribute("FINALIDADE"))
+                ]
+                publicacoes.append(linha)
+
+        # Orientacoes concluidas Pós-Doutorado
+        for orientacoes in collection.getElementsByTagName("ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO"):
+            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO')[0]
+            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO')[0]
+            ano = dados.getAttribute("ANO")
+            if ano in anos_validos:
+                if (detalhe.getAttribute("TIPO-DE-ORIENTACAO") == "CO_ORIENTADOR"):
+                    continue
+
+                pesquisador.avaliacao[ano].addSupervisaoPosDoc(1)
+
+                linha = [
+                    ano,
+                    nome, titulacao,
+                    dados.getAttribute("DOI"),
+                    normalizar(dados.getAttribute("TITULO")),
+                    f'Pós-Doutorado:{detalhe.getAttribute("TIPO-DE-ORIENTACAO")}', '', '', 
+                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
+                ]
+                publicacoes.append(linha)
+
+        # Orientacoes concluidas Doutorado
+        for orientacoes in collection.getElementsByTagName("ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO"):
+            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO')[0]
+            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO')[0]
+            ano = dados.getAttribute("ANO")
+            if ano in anos_validos:
+                if (detalhe.getAttribute("TIPO-DE-ORIENTACAO") == "CO_ORIENTADOR"):
+                    continue
+
+                pesquisador.avaliacao[ano].addTeseDoutorado(1)
+                linha = [
+                    ano,
+                    nome, titulacao,
+                    dados.getAttribute("DOI"),
+                    normalizar(dados.getAttribute("TITULO")),
+                    f'Doutorado:{detalhe.getAttribute("TIPO-DE-ORIENTACAO")}', '', '', 
+                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
+                ]
+                publicacoes.append(linha)
+
+        # Orientacoes concluidas Mestrado
+        for orientacoes in collection.getElementsByTagName("ORIENTACOES-CONCLUIDAS-PARA-MESTRADO"):
+            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-ORIENTACOES-CONCLUIDAS-PARA-MESTRADO')[0]
+            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-ORIENTACOES-CONCLUIDAS-PARA-MESTRADO')[0]
+            ano = dados.getAttribute("ANO")
+            if ano in anos_validos:
+                if (detalhe.getAttribute("TIPO-DE-ORIENTACAO") == "CO_ORIENTADOR"):
+                    continue
+
+                pesquisador.avaliacao[ano].addDissertacaoMestrado(1)
+                linha = [
+                    ano,
+                    nome, titulacao,
+                    dados.getAttribute("DOI"),
+                    normalizar(dados.getAttribute("TITULO")),
+                    f'Mestrado:{detalhe.getAttribute("TIPO-DE-ORIENTACAO")}', '', '', 
+                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
+                ]
+                publicacoes.append(linha)
+
+        # Orientacoes concluidas Especializacao / TCC / Iniciacao Científica / Extensão
+        for orientacoes in collection.getElementsByTagName("OUTRAS-ORIENTACOES-CONCLUIDAS"):
+            dados = orientacoes.getElementsByTagName('DADOS-BASICOS-DE-OUTRAS-ORIENTACOES-CONCLUIDAS')[0]
+            detalhe = orientacoes.getElementsByTagName('DETALHAMENTO-DE-OUTRAS-ORIENTACOES-CONCLUIDAS')[0]
+            ano = dados.getAttribute("ANO")            
+            if ano in anos_validos:
+                natureza = dados.getAttribute("NATUREZA")
+                if natureza == 'TRABALHO_DE_CONCLUSAO_DE_CURSO_GRADUACAO':
+                    tipo = 'TCC'
+                    pesquisador.avaliacao[ano].addTCCGraduacao(1)
+                elif natureza == 'INICIACAO_CIENTIFICA':
+                    tipo = 'IC'
+                    pesquisador.avaliacao[ano].addIniciacaoCientifica(1)
+                elif natureza == 'MONOGRAFIA_DE_CONCLUSAO_DE_CURSO_APERFEICOAMENTO_E_ESPECIALIZACAO':
+                    tipo = 'Especializacao'
+                    pesquisador.avaliacao[ano].addTCCEspecializacao(1)
+                else:
+                    continue
+                """
+                elif natureza == 'ORIENTACAO-DE-OUTRA-NATUREZA':
+                    sTipo = dados.getAttribute("TIPO").upper()
+                    if (sTipo[:7] == 'ORIENTA' and sTipo.find("PROJETO DE EXTENS") >= 0):
+                        tipo = 'Extensão'
+                        continue
+                    else:
+                        tipo = 'N/Informado'
+                        continue
+                else:
+                    tipo = 'N/Informado'
+                    continue
+                """
+
+                linha = [
+                    ano,
+                    nome, titulacao,
+                    dados.getAttribute("DOI"),
+                    normalizar(dados.getAttribute("TITULO")),
+                    f'Orientacao:{tipo}', '', '', 
+                    normalizar(detalhe.getAttribute("NOME-DO-ORIENTADO"))
+                ]
+                publicacoes.append(linha)
 
 
     except Exception as e:
@@ -589,8 +784,12 @@ def escreve_arquivo_area(pasta, publicacoes):
     return
 
 def escreve_sumario_area(pasta, lista):
-    print('=================================================')
-    print(f'Resumo de "{pasta}"')
+    if (pasta != ""):
+        print('=================================================')
+        print(f'Resumo de "{pasta}"')
+    else:
+        print('\n\n=================================================')
+        print("Resumo Geral")
     print(f'  Doutores: {lista[2]} curriculos')
     print(f'  Mestres.: {lista[1]} curriculos')
     print(f'  Outros..: {lista[0]} curriculos')
@@ -606,6 +805,21 @@ def escreve_erros_area(pasta, erros):
                 lin = erro.split(';')
                 writer.writerow([erro])
                 print(f'    {lin[0]}: {lin[1]}')
+    return
+
+def escreve_arquivo_pontuacao(pasta, pontuacoes):
+    with open(f'pontuacoes-{pasta}.csv', 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile, delimiter=';')
+        writer.writerow(['Nome', 'Pontos'])
+        for pon in pontuacoes:
+            writer.writerow(pon)
+    return
+
+def escreve_barema(arquivo, pesquisador):
+    arquivo = f'{arquivo[:-4]}-barema.html'
+    with open(arquivo, 'w', encoding='utf-8') as arq:
+        arq.writelines(baremas.geraHTML(pesquisador))
+        arq.close()
     return
 
 # Seleciona arquivos XML de pastas e retorna uma lista de pastas e os respectivos arquivos XMLs para análise
@@ -624,12 +838,15 @@ def seleciona_XMLs_pastas(pasta_curriculos):
 
 def main():
     global erros_xml
-    global resumo    
+    global resumo
+    global pq
+
     pasta_curriculos = 'curriculos'
     ano_fim = 2025
     ano_inicio = ano_fim - 3 # 3 anos anteriores
-    anos_validos = [str(a) for a in range(ano_inicio, ano_fim + 1)]
+    anos_validos = [str(a) for a in range(ano_inicio, ano_fim)]
 
+    resumo_total = resumo.copy()
     lstPastas = seleciona_XMLs_pastas(pasta_curriculos)
     for caminho, XMLs in lstPastas:
         pastas = caminho.split(os.sep)
@@ -638,17 +855,33 @@ def main():
         else:
             pasta = caminho
         print(f"\nLendo arquivo na pasta: {pasta} ({len(XMLs)} arquivos)")
+        avaliacao = []
         todas_publicacoes = []
 
         for arqXML in XMLs:
+            if (pasta.lower() == "letras linguistica"):
+                pesquisador = baremas.PesquisadorA("", anos_validos)
+            elif (pasta.lower() in ["humanas", "sociais aplicadas"]):
+                pesquisador = baremas.PesquisadorH("", anos_validos)
+            else:
+                pesquisador = baremas.PesquisadorE("", anos_validos)
+
             caminho_xml = os.path.join(caminho, arqXML)
-            publicacoes = extrair_publicacoes(caminho_xml, anos_validos, arqXML)
+            publicacoes = extrair_publicacoes(caminho_xml, anos_validos, arqXML, pesquisador)
             todas_publicacoes.extend(publicacoes)
+            avaliacao.append([pesquisador.nome, pesquisador.pontuacao_total()])
+            escreve_barema(caminho_xml, pesquisador)
+                                   
         escreve_arquivo_area(pasta, todas_publicacoes)
         escreve_sumario_area(pasta, resumo)
-        escreve_erros_area(pasta, erros_xml)            
+        escreve_erros_area(pasta, erros_xml)
+        escreve_arquivo_pontuacao(pastas[0], avaliacao)
         erros_xml.clear()
+        for r in range(len(resumo)):
+            resumo_total[r] += resumo[r]
         resumo = [0, 0, 0, 0]
+
+    escreve_sumario_area("", resumo_total)
 
     with open('periodicos.csv', 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=';')
@@ -657,6 +890,8 @@ def main():
         for per in periodicos:
             lin = per.split(';')
             writer.writerow(lin)
+
+    print('\nTotal de PQs:', pq)
 
 
 if __name__ == '__main__':
