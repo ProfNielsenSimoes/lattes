@@ -532,7 +532,7 @@ def geraHTML(p):
     sRes.append('</head>')
     sRes.append('<body>')
     sRes.append('    <div class="container">')
-    sRes.append('        <h3>Docente:</h3>        ')
+    sRes.append(f'        <h3>Avaliação de {p.nome}</h3>')
     sRes.append('        ')
     sRes.append('        <!-- Formação Acadêmica -->')
     sRes.append('        <table>')
