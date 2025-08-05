@@ -602,6 +602,20 @@ def escreve_erros_area(pasta, erros):
                 print(f'    {lin[0]}: {lin[1]}')
     return
 
+# Seleciona arquivos XML de pastas e retorna uma lista de pastas e os respectivos arquivos XMLs para análise
+def seleciona_XMLs_pastas(pasta_curriculos):
+    lstPastas = []
+    
+    for root, folders, files in os.walk(pasta_curriculos):
+        lstF = []
+        for f in files:
+            if f.lower().endswith('.xml'):
+                lstF.append(f)
+        
+        if len(lstF)>0:
+            lstPastas.append([root, lstF])
+    return lstPastas
+
 def main():
     global erros_xml
     global resumo    
@@ -609,28 +623,26 @@ def main():
     ano_fim = 2025
     ano_inicio = ano_fim - 3 # 3 anos anteriores
     anos_validos = [str(a) for a in range(ano_inicio, ano_fim + 1)]
-    pastas = []
 
-    for root, folders, files in os.walk(pasta_curriculos):
-        if (len(folders)>0):
-            pastas = folders.copy()
+    lstPastas = seleciona_XMLs_pastas(pasta_curriculos)
+    for caminho, XMLs in lstPastas:
+        pastas = caminho.split(os.sep)
+        if len(pastas) > 1:
+            pasta = pastas[-1]
         else:
-            pastas.append('curriculos')
-        if (len(files)>0):
-            print(f"\nLendo arquivo na pasta: {pastas[0]} ({len(files)} arquivos)")
-            todas_publicacoes = []
+            pasta = caminho
+        print(f"\nLendo arquivo na pasta: {pasta} ({len(XMLs)} arquivos)")
+        todas_publicacoes = []
 
-            for file in files:
-                if file.endswith('.xml'):
-                    caminho_xml = os.path.join(root, file)
-                    publicacoes = extrair_publicacoes(caminho_xml, anos_validos, file)
-                    todas_publicacoes.extend(publicacoes)
-            escreve_arquivo_area(pastas[0], todas_publicacoes)
-            escreve_sumario_area(pastas[0], resumo)
-            escreve_erros_area(pastas[0], erros_xml)            
-            erros_xml.clear()
-            resumo = [0, 0, 0, 0]
-            pastas.pop(0)
+        for arqXML in XMLs:
+            caminho_xml = os.path.join(caminho, arqXML)
+            publicacoes = extrair_publicacoes(caminho_xml, anos_validos, arqXML)
+            todas_publicacoes.extend(publicacoes)
+        escreve_arquivo_area(pasta, todas_publicacoes)
+        escreve_sumario_area(pasta, resumo)
+        escreve_erros_area(pasta, erros_xml)            
+        erros_xml.clear()
+        resumo = [0, 0, 0, 0]
 
     with open('periodicos.csv', 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=';')
