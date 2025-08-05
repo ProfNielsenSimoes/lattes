@@ -4,7 +4,7 @@ import unicodedata
 from xml.dom.minidom import parse
 from datetime import datetime
 import relatorioQualis as rq
-
+import JCR2024 as jcr
 
 revistas = {
     '?': '-',
@@ -260,12 +260,16 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                 per = normalizar(detalhe.getAttribute("TITULO-DO-PERIODICO-OU-REVISTA").upper())
                 per = issn + ';' + corrigir_nome(per.replace('.', ' ').strip(), revistas)
 
-                if (issn in rq.estratoQualis.keys()):
+                if (issn in jcr.jcr.keys()):
+                    qualis = f'JCR:{jcr.jcr[issn][0]}'                    
+                elif (issn in jcr.eissn.keys()):
+                    qualis = f'JCR:{jcr.eissn[issn][0]}'                    
+                elif (issn in rq.estratoQualis.keys()):
                     qualis = rq.estratoQualis[issn][1]
                 else:
                     qualis = ''
                     continue
-                
+
                 if ((len(qualis) > 0) and (qualis.upper()[0]=='C')):
                     continue
                 linha = [
