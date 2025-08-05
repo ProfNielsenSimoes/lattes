@@ -264,6 +264,8 @@ def extrair_publicacoes(xml_path, anos_validos, file_name):
                     qualis = rq.estratoQualis[issn][1]
                 else:
                     qualis = ''
+                    continue
+                
                 if ((len(qualis) > 0) and (qualis.upper()[0]=='C')):
                     continue
                 linha = [
