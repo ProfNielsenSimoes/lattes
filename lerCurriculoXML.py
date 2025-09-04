@@ -875,7 +875,7 @@ def main():
         escreve_arquivo_area(pasta, todas_publicacoes)
         escreve_sumario_area(pasta, resumo)
         escreve_erros_area(pasta, erros_xml)
-        escreve_arquivo_pontuacao(pastas[0], avaliacao)
+        escreve_arquivo_pontuacao(pasta, avaliacao)
         erros_xml.clear()
         for r in range(len(resumo)):
             resumo_total[r] += resumo[r]
