@@ -466,7 +466,7 @@ def geraHTML(p):
     sRes.append('<head>')
     sRes.append('    <meta charset="UTF-8">')
     sRes.append('    <meta name="viewport" content="width=device-width, initial-scale=1.0">')
-    sRes.append(f'    <title>Avaliação {p.nome}</title>')
+    sRes.append(f'    <title>Avaliação de {p.nome}</title>')
     sRes.append('    <style>')
     sRes.append('        body {')
     sRes.append('            font-family: Arial, sans-serif;')
